@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PyPad — Python Playground</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>"/>
+
+<!-- Monaco Editor -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/editor/editor.main.min.css"/>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #0d0d0f;
+  --surface:  #141416;
+  --surface2: #1a1a1e;
+  --surface3: #222228;
+  --border:   #2a2a32;
+  --text:     #d4d4d8;
+  --text2:    #71717a;
+  --text3:    #52525b;
+  --green:    #4ade80;
+  --red:      #f87171;
+  --blue:     #60a5fa;
+  --gold:     #fbbf24;
+  --teal:     #2dd4bf;
+  --radius:   6px;
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
+
+/* ── Layout ── */
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ── Top bar ── */
+#topbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px; height: 46px; flex-shrink: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.logo { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 15px; color: #fff; }
+.logo-icon { font-size: 18px; }
+.logo-ver { font-size: 11px; color: var(--text2); font-weight: 400; margin-left: 2px; }
+.spacer { flex: 1; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 13px; border-radius: var(--radius); border: none;
+  font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s;
+  font-family: inherit; white-space: nowrap;
+}
+.btn-run {
+  background: var(--green); color: #052e16;
+  box-shadow: 0 0 0 0 rgba(74,222,128,0);
+  transition: box-shadow .2s, background .15s;
+}
+.btn-run:hover { background: #86efac; }
+.btn-run:disabled { background: #166534; color: #4ade8066; cursor: not-allowed; }
+.btn-run.loading { animation: pulse-green 1s infinite; }
+@keyframes pulse-green { 0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,.4)} 50%{box-shadow:0 0 0 6px rgba(74,222,128,0)} }
+
+.btn-ghost {
+  background: transparent; color: var(--text2); border: 1px solid var(--border);
+}
+.btn-ghost:hover { background: var(--surface2); color: var(--text); }
+.btn-copy-ok { color: var(--green) !important; border-color: var(--green) !important; }
+
+/* ── Select ── */
+select {
+  background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 5px 10px; font-size: 12px; font-family: inherit;
+  cursor: pointer; outline: none;
+}
+select:hover { border-color: var(--text3); }
+
+/* ── Status dot ── */
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+.status-dot.ready { background: var(--green); box-shadow: 0 0 5px rgba(74,222,128,.5); }
+.status-dot.loading { background: var(--gold); animation: blink .9s infinite; }
+.status-dot.error { background: var(--red); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+#status-label { font-size: 11.5px; color: var(--text2); }
+
+/* ── Main split ── */
+#main { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+/* ── Editor panel ── */
+#editor-panel { display: flex; flex-direction: column; flex: 1; min-width: 0; border-right: 1px solid var(--border); }
+#editor-tab {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px; height: 36px; flex-shrink: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text2);
+}
+.tab-name { color: var(--text); font-weight: 500; }
+#editor-mount { flex: 1; min-height: 0; }
+
+/* ── Output panel ── */
+#output-panel { display: flex; flex-direction: column; width: 38%; min-width: 280px; }
+#output-tab {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px; height: 36px; flex-shrink: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text2);
+}
+#output-tab svg { width: 13px; height: 13px; opacity: .7; }
+#output-scroll { flex: 1; overflow-y: auto; padding: 14px 16px; min-height: 0; }
+#output-scroll::-webkit-scrollbar { width: 5px; }
+#output-scroll::-webkit-scrollbar-track { background: transparent; }
+#output-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Output content ── */
+#output-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 10px; color: var(--text3); }
+#output-placeholder svg { width: 32px; height: 32px; opacity: .3; }
+#output-placeholder p { font-size: 13px; }
+#output-placeholder kbd {
+  font-size: 11px; padding: 1px 6px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--surface2); color: var(--text2);
+  font-family: monospace;
+}
+
+.out-stdout { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 12.5px; color: var(--text); white-space: pre-wrap; word-break: break-word; line-height: 1.65; }
+.out-stderr { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 12.5px; color: var(--red); white-space: pre-wrap; word-break: break-word; line-height: 1.65; }
+.out-meta { display: flex; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text3); }
+.out-meta .badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 99px; font-size: 11px;
+}
+.badge-ok { background: rgba(74,222,128,.12); color: var(--green); }
+.badge-err { background: rgba(248,113,113,.12); color: var(--red); }
+.badge-time { background: var(--surface2); color: var(--text2); }
+
+/* ── Pyodide loading overlay ── */
+#loading-overlay {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; z-index: 100;
+}
+#loading-overlay.hidden { display: none; }
+.spinner {
+  width: 36px; height: 36px; border: 3px solid var(--border);
+  border-top-color: var(--green); border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#loading-overlay p { font-size: 14px; color: var(--text2); }
+#loading-overlay small { font-size: 12px; color: var(--text3); }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>Loading Python runtime…</p>
+  <small>Pyodide 3.12 · first load may take a few seconds</small>
+</div>
+
+<div id="app">
+  <!-- Top bar -->
+  <div id="topbar">
+    <div class="logo">
+      <span class="logo-icon">🐍</span>
+      PyPad
+      <span class="logo-ver">Python 3.12</span>
+    </div>
+
+    <div class="spacer"></div>
+
+    <select id="example-select" onchange="loadExample(this.value)">
+      <option value="">Load example…</option>
+      <option value="hello">Hello World</option>
+      <option value="fibonacci">Fibonacci</option>
+      <option value="list_comp">List Comprehension</option>
+      <option value="bmi">BMI Calculator</option>
+    </select>
+
+    <button class="btn btn-ghost" id="btn-copy" onclick="copyCode()" title="Copy code">
+      <svg id="copy-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <svg id="check-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none"><polyline points="20 6 9 17 4 12"/></svg>
+      <span id="copy-label">Copy</span>
+    </button>
+
+    <button class="btn btn-ghost" id="btn-clear" onclick="clearOutput()" title="Clear output">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+      Clear
+    </button>
+
+    <button class="btn btn-run" id="btn-run" onclick="runCode()" title="Run (Ctrl+Enter)">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Run
+    </button>
+
+    <div style="display:flex;align-items:center;gap:5px;margin-left:4px">
+      <div class="status-dot loading" id="status-dot"></div>
+      <span id="status-label">Loading…</span>
+    </div>
+  </div>
+
+  <!-- Main split -->
+  <div id="main">
+    <!-- Editor -->
+    <div id="editor-panel">
+      <div id="editor-tab">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="tab-name">main.py</span>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;color:var(--text3)">Ctrl+Enter to run</span>
+      </div>
+      <div id="editor-mount"></div>
+    </div>
+
+    <!-- Output -->
+    <div id="output-panel">
+      <div id="output-tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        Output
+      </div>
+      <div id="output-scroll">
+        <div id="output-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <p>Run your code to see output</p>
+          <p style="font-size:12px"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> or click Run</p>
+        </div>
+        <div id="output-content" style="display:none">
+          <div class="out-stdout" id="out-stdout"></div>
+          <div class="out-stderr" id="out-stderr"></div>
+          <div class="out-meta" id="out-meta" style="display:none">
+            <span class="badge" id="badge-exit"></span>
+            <span class="badge badge-time" id="badge-time"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Monaco loader -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+
+<!-- Pyodide -->
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+
+<script>
+// ── Examples ─────────────────────────────────────────────────────────────────
+const EXAMPLES = {
+  hello: `print("Hello, PyPad!")
+
+# A simple loop
+for i in range(3):
+    print(f"Counting: {i}")`,
+
+  fibonacci: `def fibonacci(n):
+    if n <= 0:
+        return []
+    elif n == 1:
+        return [0]
+
+    seq = [0, 1]
+    while len(seq) < n:
+        seq.append(seq[-1] + seq[-2])
+    return seq
+
+print("First 10 Fibonacci numbers:")
+print(fibonacci(10))`,
+
+  list_comp: `# List comprehensions and dicts
+squares = [x**2 for x in range(10)]
+print(f"Squares: {squares}")
+
+evens = {x: x**2 for x in range(10) if x % 2 == 0}
+print(f"Even squares dict:\\n{evens}")`,
+
+  bmi: `def bmi_report(name, age, weight_kg, height_m):
+    bmi = weight_kg / (height_m ** 2)
+
+    if bmi < 18.5:
+        category = "Underweight"
+    elif bmi < 25:
+        category = "Normal weight"
+    elif bmi < 30:
+        category = "Overweight"
+    else:
+        category = "Obese"
+
+    print(f"{name}, {age}y — BMI {bmi:.1f} ({category})")
+
+bmi_report("John",    65, 103, 1.78)
+bmi_report("Roberto", 70,  85, 1.70)
+bmi_report("Hazem",   45,  78, 1.80)`,
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let editor = null;
+let pyodide = null;
+let isRunning = false;
+
+// ── Monaco setup ──────────────────────────────────────────────────────────────
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
+
+require(['vs/editor/editor.main'], function () {
+  editor = monaco.editor.create(document.getElementById('editor-mount'), {
+    value: EXAMPLES.hello,
+    language: 'python',
+    theme: 'vs-dark',
+    fontSize: 14,
+    fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
+    fontLigatures: true,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    lineNumbers: 'on',
+    renderLineHighlight: 'gutter',
+    padding: { top: 14, bottom: 14 },
+    wordWrap: 'on',
+    automaticLayout: true,
+    tabSize: 4,
+    insertSpaces: true,
+  });
+
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runCode());
+});
+
+// ── Pyodide setup ─────────────────────────────────────────────────────────────
+async function initPyodide() {
+  try {
+    pyodide = await loadPyodide();
+    // Redirect stdout/stderr
+    await pyodide.runPythonAsync(`
+import sys, io
+class _Capture(io.StringIO):
+    pass
+sys.stdout = _Capture()
+sys.stderr = _Capture()
+`);
+    setStatus('ready', 'Ready');
+    document.getElementById('loading-overlay').classList.add('hidden');
+    document.getElementById('btn-run').disabled = false;
+  } catch (e) {
+    setStatus('error', 'Failed to load');
+    document.getElementById('loading-overlay').querySelector('p').textContent = 'Failed to load Python runtime.';
+  }
+}
+
+function setStatus(state, label) {
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot ' + state;
+  document.getElementById('status-label').textContent = label;
+}
+
+// ── Run code ──────────────────────────────────────────────────────────────────
+async function runCode() {
+  if (!pyodide || isRunning) return;
+  isRunning = true;
+
+  const code = editor.getValue();
+  const btnRun = document.getElementById('btn-run');
+  btnRun.disabled = true;
+  btnRun.classList.add('loading');
+  setStatus('loading', 'Running…');
+
+  // Reset capture buffers
+  await pyodide.runPythonAsync(`sys.stdout.truncate(0); sys.stdout.seek(0); sys.stderr.truncate(0); sys.stderr.seek(0)`);
+
+  const start = performance.now();
+  let exitCode = 0;
+
+  try {
+    // Timeout via Promise.race
+    const exec = pyodide.runPythonAsync(code);
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('TIMEOUT')), 10000)
+    );
+    await Promise.race([exec, timeout]);
+  } catch (err) {
+    if (err.message === 'TIMEOUT') {
+      await pyodide.runPythonAsync(`sys.stderr.write("Execution timed out after 10 seconds.")`);
+    } else {
+      // Python exception — write to stderr
+      const msg = err.message || String(err);
+      await pyodide.runPythonAsync(`sys.stderr.write(${JSON.stringify(msg)})`);
+    }
+    exitCode = 1;
+  }
+
+  const durationMs = Math.round(performance.now() - start);
+
+  const stdout = pyodide.runPython('sys.stdout.getvalue()');
+  const stderr = pyodide.runPython('sys.stderr.getvalue()');
+
+  showOutput(stdout, stderr, exitCode, durationMs);
+
+  btnRun.disabled = false;
+  btnRun.classList.remove('loading');
+  setStatus('ready', 'Ready');
+  isRunning = false;
+}
+
+// ── Display output ────────────────────────────────────────────────────────────
+function showOutput(stdout, stderr, exitCode, durationMs) {
+  document.getElementById('output-placeholder').style.display = 'none';
+  document.getElementById('output-content').style.display = 'block';
+
+  document.getElementById('out-stdout').textContent = stdout;
+  document.getElementById('out-stderr').textContent = stderr;
+
+  const meta = document.getElementById('out-meta');
+  const badgeExit = document.getElementById('badge-exit');
+  const badgeTime = document.getElementById('badge-time');
+
+  meta.style.display = 'flex';
+  badgeExit.className = 'badge ' + (exitCode === 0 ? 'badge-ok' : 'badge-err');
+  badgeExit.textContent = exitCode === 0 ? '✓ Exit 0' : `✗ Exit ${exitCode}`;
+  badgeTime.textContent = `${durationMs}ms`;
+
+  document.getElementById('output-scroll').scrollTop = 0;
+}
+
+// ── Clear ─────────────────────────────────────────────────────────────────────
+function clearOutput() {
+  document.getElementById('output-placeholder').style.display = 'flex';
+  document.getElementById('output-content').style.display = 'none';
+  document.getElementById('out-stdout').textContent = '';
+  document.getElementById('out-stderr').textContent = '';
+  document.getElementById('out-meta').style.display = 'none';
+}
+
+// ── Examples ──────────────────────────────────────────────────────────────────
+function loadExample(key) {
+  if (!key || !editor) return;
+  editor.setValue(EXAMPLES[key] || '');
+  clearOutput();
+  document.getElementById('example-select').value = '';
+}
+
+// ── Copy code ─────────────────────────────────────────────────────────────────
+function copyCode() {
+  if (!editor) return;
+  navigator.clipboard.writeText(editor.getValue()).then(() => {
+    document.getElementById('copy-icon').style.display = 'none';
+    document.getElementById('check-icon').style.display = 'inline';
+    document.getElementById('copy-label').textContent = 'Copied!';
+    document.getElementById('btn-copy').classList.add('btn-copy-ok');
+    setTimeout(() => {
+      document.getElementById('copy-icon').style.display = 'inline';
+      document.getElementById('check-icon').style.display = 'none';
+      document.getElementById('copy-label').textContent = 'Copy';
+      document.getElementById('btn-copy').classList.remove('btn-copy-ok');
+    }, 2000);
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+document.getElementById('btn-run').disabled = true;
+initPyodide();
+</script>
+</body>
+</html>
